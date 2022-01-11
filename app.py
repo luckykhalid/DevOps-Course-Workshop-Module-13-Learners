@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request
 from datetime import datetime, timezone
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.ext.flask.flask_middleware import FlaskMiddleware
+from opencensus.trace.samplers import ProbabilitySampler
 
 from werkzeug.utils import redirect
 from flask_config import Config
@@ -7,7 +10,20 @@ from data.database import initialise_database, add_order, clear_orders, count_or
 from scheduled_jobs import initialise_scheduled_jobs
 from products import create_product_download
 import requests
+import logging
+from opencensus.ext.azure.log_exporter import AzureLogHandler
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.addHandler(AzureLogHandler())
+
 app = Flask(__name__)
+
+middleware = FlaskMiddleware(
+    app,
+    exporter=AzureExporter(),
+    sampler=ProbabilitySampler(rate=1.0),
+)
 app.config.from_object(Config)
 
 initialise_database(app)
@@ -21,11 +37,11 @@ def index():
     recently_placed_count = get_recently_placed_count()
     recently_processed_count = get_recently_processed_count()
     scenarios = [
-        { 'display': 'Add broken order', 'value': 'BrokenOrder' },
-        { 'display': 'Monitoring Load', 'value': 'HighLoad' },
-        { 'display': 'Queue Reliability', 'value': 'UnreliableProcessing' },
-        { 'display': 'System Monitoring', 'value': 'VeryHighLoad' },
-        { 'display': 'Reset to initial', 'value': 'Reset' }
+        {'display': 'Add broken order', 'value': 'BrokenOrder'},
+        {'display': 'Monitoring Load', 'value': 'HighLoad'},
+        {'display': 'Queue Reliability', 'value': 'UnreliableProcessing'},
+        {'display': 'System Monitoring', 'value': 'VeryHighLoad'},
+        {'display': 'Reset to initial', 'value': 'Reset'}
     ]
 
     return render_template(
@@ -33,9 +49,10 @@ def index():
         recently_processed_count=recently_processed_count, scenarios=scenarios
     )
 
+
 @app.route("/count")
 def count():
-    return { 'count': count_orders() }
+    return {'count': count_orders()}
 
 
 @app.route("/new", methods=["POST"])
@@ -59,7 +76,8 @@ def set_scenario():
     if scenario == 'BrokenOrder':
         product = 'Product from the future'
         download = create_product_download(product)
-        add_order('Product from the future', 'Me', '3000-01-01T12:00:00Z', None, download)
+        add_order('Product from the future', 'Me',
+                  '3000-01-01T12:00:00Z', None, download)
         return redirect('/')
 
     if scenario == 'Reset':
@@ -72,6 +90,7 @@ def set_scenario():
     response.raise_for_status()
 
     return redirect('/')
+
 
 if __name__ == "__main__":
     app.run()

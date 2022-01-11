@@ -5,3 +5,5 @@ flask-sqlalchemy>=2.5.1
 pyodbc>=4.0.30
 pytz>=2021.1
 apscheduler==3.7.0
+opencensus-ext-azure>=1.1.0
+opencensus-ext-flask>=0.7.6
